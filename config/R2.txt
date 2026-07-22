@@ -1,0 +1,49 @@
+! ============================================================
+! Device: R2 — Branch Router
+! Role: Inter-VLAN Routing, DHCP Relay, OSPF, SSH
+! ============================================================
+
+hostname R2_BRANCH_ROUTER
+
+! ── SSH ──────────────────────────────────────────────────────
+ip domain-name corp.lab
+ip ssh version 2
+username admin privilege 15 secret Admin@123
+crypto key generate rsa modulus 2048
+
+! ── Interfaces ───────────────────────────────────────────────
+interface GigabitEthernet0/0
+ no ip address
+ no shutdown
+
+! Branch VLAN 10 subinterface with DHCP relay to R1
+interface GigabitEthernet0/0.10
+ encapsulation dot1Q 10
+ ip address 192.168.110.1 255.255.255.224
+ ip helper-address 10.0.0.1
+
+! Branch VLAN 20 subinterface with DHCP relay to R1
+interface GigabitEthernet0/0.20
+ encapsulation dot1Q 20
+ ip address 192.168.120.1 255.255.255.240
+ ip helper-address 10.0.0.1
+
+! ── WAN Interface ─────────────────────────────────────────────
+interface GigabitEthernet0/1
+ ip address 10.0.0.2 255.255.255.252
+ no shutdown
+
+! ── OSPF ─────────────────────────────────────────────────────
+router ospf 1
+ network 10.0.0.0 0.0.0.3 area 0
+ network 192.168.110.0 0.0.0.31 area 0
+ network 192.168.120.0 0.0.0.15 area 0
+
+! ── Line Configuration ────────────────────────────────────────
+line con 0
+ password Cisco@123
+ login
+
+line vty 0 4
+ login local
+ transport input ssh
