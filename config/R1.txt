@@ -1,0 +1,131 @@
+! ============================================================
+! Device: R1 — HQ Router
+! Role: Inter-VLAN Routing, DHCP Server, NAT/PAT, OSPF, SSH
+! ============================================================
+ 
+hostname R1_HQ_Router
+ 
+! ── DHCP Excluded Addresses ──────────────────────────────────
+ip dhcp excluded-address 192.168.10.1 192.168.10.5
+ip dhcp excluded-address 192.168.20.1 192.168.20.5
+ip dhcp excluded-address 192.168.30.1 192.168.30.5
+ip dhcp excluded-address 192.168.40.1 192.168.40.3
+ip dhcp excluded-address 192.168.110.1 192.168.110.5
+ip dhcp excluded-address 192.168.120.1 192.168.120.5
+ 
+! ── DHCP Pools ───────────────────────────────────────────────
+ip dhcp pool VLAN10_SALES
+ network 192.168.10.0 255.255.255.192
+ default-router 192.168.10.1
+ dns-server 8.8.8.8
+ 
+ip dhcp pool VLAN20_IT
+ network 192.168.20.0 255.255.255.224
+ default-router 192.168.20.1
+ dns-server 8.8.8.8
+ 
+ip dhcp pool VLAN30_HR
+ network 192.168.30.0 255.255.255.240
+ default-router 192.168.30.1
+ dns-server 8.8.8.8
+ 
+ip dhcp pool VLAN40_MANAGEMENT
+ network 192.168.40.0 255.255.255.248
+ default-router 192.168.40.1
+ dns-server 8.8.8.8
+ 
+ip dhcp pool VLAN10_BRANCH1
+ network 192.168.110.0 255.255.255.224
+ default-router 192.168.110.1
+ dns-server 8.8.8.8
+ 
+ip dhcp pool VLAN20_BRANCH2
+ network 192.168.120.0 255.255.255.240
+ default-router 192.168.120.1
+ dns-server 8.8.8.8
+ 
+! ── SSH ──────────────────────────────────────────────────────
+ip domain-name corp.lab
+ip ssh version 2
+username admin privilege 15 secret Admin@123
+crypto key generate rsa modulus 2048
+ 
+! ── Interfaces ───────────────────────────────────────────────
+interface GigabitEthernet0/0
+ no ip address
+ ip nat inside
+ no shutdown
+ 
+interface GigabitEthernet0/0.10
+ encapsulation dot1Q 10
+ ip address 192.168.10.1 255.255.255.192
+ ip access-group BLOCK_SALES_WEB in
+ ip nat inside
+ 
+interface GigabitEthernet0/0.20
+ encapsulation dot1Q 20
+ ip address 192.168.20.1 255.255.255.224
+ ip nat inside
+ 
+interface GigabitEthernet0/0.30
+ encapsulation dot1Q 30
+ ip address 192.168.30.1 255.255.255.240
+ ip access-group BLOCK_HR in
+ ip nat inside
+ 
+interface GigabitEthernet0/0.40
+ encapsulation dot1Q 40
+ ip address 192.168.40.1 255.255.255.248
+ ip nat inside
+ 
+! ── WAN Interface ─────────────────────────────────────────────
+interface GigabitEthernet0/1
+ ip address 10.0.0.1 255.255.255.252
+ ip nat inside
+ no shutdown
+ 
+! ── Internet Interface ────────────────────────────────────────
+interface GigabitEthernet0/2
+ ip address 203.0.113.1 255.255.255.252
+ ip nat outside
+ no shutdown
+ 
+! ── OSPF ─────────────────────────────────────────────────────
+router ospf 1
+ network 192.168.10.0 0.0.0.63 area 0
+ network 192.168.20.0 0.0.0.31 area 0
+ network 192.168.30.0 0.0.0.15 area 0
+ network 192.168.40.0 0.0.0.7 area 0
+ network 10.0.0.0 0.0.0.3 area 0
+ 
+! ── NAT/PAT ──────────────────────────────────────────────────
+ip access-list standard NAT_POOL
+ permit 192.168.0.0 0.0.255.255
+ 
+ip nat inside source list NAT_POOL interface GigabitEthernet0/2 overload
+ 
+! ── Default Route ─────────────────────────────────────────────
+ip route 0.0.0.0 0.0.0.0 203.0.113.2
+ 
+! ── ACLs ─────────────────────────────────────────────────────
+! Block HR from reaching Server0 (192.168.40.2)
+ip access-list extended BLOCK_HR
+ deny ip 192.168.30.0 0.0.0.15 host 192.168.40.2
+ permit ip any any
+ 
+! Sales can only use HTTP/HTTPS to Server0 — all else denied
+ip access-list extended BLOCK_SALES_WEB
+ permit tcp 192.168.10.0 0.0.0.63 host 192.168.40.2 eq www
+ permit tcp 192.168.10.0 0.0.0.63 host 192.168.40.2 eq 443
+ deny tcp 192.168.10.0 0.0.0.63 host 192.168.40.2
+ deny icmp 192.168.10.0 0.0.0.63 host 192.168.40.2
+ permit ip any any
+ 
+! ── Line Configuration ────────────────────────────────────────
+line con 0
+ password Cisco@123
+ login
+ 
+line vty 0 4
+ login local
+ transport input ssh
